@@ -54,9 +54,13 @@ export function getClient() {
   });
 }
 
+// Global human payment rate (~28,935/sec based on Visa+Mastercard+others)
+// Sources: Visa ~65K tps capacity, processes ~7,400 avg; MC ~5,000; others ~16,500
+const GLOBAL_HUMAN_PAYMENTS_PER_SEC = 28_935;
+
 export interface ChainStats {
   currentBlock: number;
-  totalTxs24h: number;
+  totalTempoTxs24h: number;
   blocksPerSecond: number;
   txsPerSecond: number;
   humanTxsPerSecond: number;
@@ -209,51 +213,41 @@ export async function fetchChainStats(): Promise<ChainStats> {
     const totalClassified =
       classification.machineTxCount + classification.humanTxCount;
 
-    let machineTxsPerSecond: number;
-    let humanTxsPerSecond: number;
-    let machineVolumeRate: number;
-    let humanVolumeRate: number;
+    // Machine payments = MPP micropayments on Tempo (real on-chain data)
+    // Human payments = global payment networks (Visa, MC, etc.)
+    const machineTxsPerSecond =
+      totalClassified > 0
+        ? classification.machineTxCount / timeDelta
+        : 0;
+    const humanTxsPerSecond = GLOBAL_HUMAN_PAYMENTS_PER_SEC;
 
-    if (totalClassified > 0) {
-      // Real data from TIP-20 transfer classification
-      const machineRatio =
-        classification.machineTxCount / totalClassified;
-      machineTxsPerSecond = txsPerSecond * machineRatio;
-      humanTxsPerSecond = txsPerSecond * (1 - machineRatio);
-      machineVolumeRate = classification.machineVolume / timeDelta;
-      humanVolumeRate = classification.humanVolume / timeDelta;
-    } else {
-      // Fallback: no TIP-20 events found yet (chain might be very new)
-      machineTxsPerSecond = 0;
-      humanTxsPerSecond = txsPerSecond;
-      machineVolumeRate = 0;
-      humanVolumeRate = 0;
-    }
+    const machineVolumeRate =
+      totalClassified > 0
+        ? classification.machineVolume / timeDelta
+        : 0;
 
     const humanToMachineRatio =
       machineTxsPerSecond > 0
-        ? humanTxsPerSecond / machineTxsPerSecond
+        ? Math.round(humanTxsPerSecond / machineTxsPerSecond)
         : 0;
 
     // Extrapolate 24h totals
-    const totalTxs24h = Math.round(txsPerSecond * 86400);
-    const totalVolume =
-      (machineVolumeRate + humanVolumeRate) * 86400;
+    const totalTempoTxs24h = Math.round(txsPerSecond * 86400);
+    const machineTxs24h = Math.round(machineTxsPerSecond * 86400);
     const machineVolume24h = machineVolumeRate * 86400;
 
     const stats: ChainStats = {
       currentBlock: Number(currentBlockNumber),
-      totalTxs24h,
+      totalTempoTxs24h,
       blocksPerSecond,
       txsPerSecond,
       humanTxsPerSecond,
       machineTxsPerSecond,
-      volume24h: totalVolume > 0 ? totalVolume : totalTxs24h * 0.5,
+      volume24h: machineVolume24h,
       machineVolume24h,
       activeAgents: classification.uniqueSenders.size || 0,
       activeServices: classification.uniqueReceivers.size || 0,
-      humanToMachineRatio:
-        Math.round(humanToMachineRatio * 10) / 10,
+      humanToMachineRatio,
       timestamp: Date.now(),
     };
 
@@ -264,10 +258,10 @@ export async function fetchChainStats(): Promise<ChainStats> {
     console.error("Failed to fetch chain stats:", error);
     return {
       currentBlock: 0,
-      totalTxs24h: 0,
+      totalTempoTxs24h: 0,
       blocksPerSecond: 0,
       txsPerSecond: 0,
-      humanTxsPerSecond: 0,
+      humanTxsPerSecond: GLOBAL_HUMAN_PAYMENTS_PER_SEC,
       machineTxsPerSecond: 0,
       volume24h: 0,
       machineVolume24h: 0,

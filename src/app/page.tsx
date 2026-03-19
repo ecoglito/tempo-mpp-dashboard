@@ -11,8 +11,7 @@ export default function Home() {
           </span>
         </h1>
         <p className="mt-3 text-zinc-500 text-lg max-w-xl mx-auto">
-          The machine economy is being built.{" "}
-          <span className="text-zinc-400">Watch it happen.</span>
+          Autonomous agents deserve autonomous payments.
         </p>
       </header>
 

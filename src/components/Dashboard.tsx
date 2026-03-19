@@ -159,22 +159,22 @@ export function Dashboard() {
       <StatsRow
         stats={[
           {
-            label: "Tempo Txs (24h)",
-            value: stats.totalTxs24h,
+            label: "MPP Txs (24h)",
+            value: Math.round(stats.machineTxsPerSecond * 86400),
             format: "number",
           },
           {
-            label: "Volume (24h)",
-            value: stats.volume24h,
+            label: "MPP Volume (24h)",
+            value: stats.machineVolume24h,
             format: "usd",
           },
           {
-            label: "MPP Agents",
+            label: "Active Agents",
             value: stats.activeAgents,
             format: "number",
           },
           {
-            label: "MPP Services",
+            label: "Active Services",
             value: stats.activeServices,
             format: "number",
           },
