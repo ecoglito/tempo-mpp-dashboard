@@ -159,7 +159,7 @@ export function Dashboard() {
       <StatsRow
         stats={[
           {
-            label: "Total Tempo Txs (24h)",
+            label: "Tempo Txs (24h)",
             value: stats.totalTxs24h,
             format: "number",
           },
@@ -169,12 +169,12 @@ export function Dashboard() {
             format: "usd",
           },
           {
-            label: "Active Agents",
+            label: "MPP Agents",
             value: stats.activeAgents,
             format: "number",
           },
           {
-            label: "Active Services",
+            label: "MPP Services",
             value: stats.activeServices,
             format: "number",
           },

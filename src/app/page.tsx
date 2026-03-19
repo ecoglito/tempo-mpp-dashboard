@@ -22,7 +22,7 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="py-8 px-4 text-center border-t border-zinc-800/50">
+      <footer className="py-8 px-4 text-center border-t border-zinc-800/50 space-y-2">
         <p className="text-xs text-zinc-600">
           Data from{" "}
           <a
@@ -43,7 +43,17 @@ export default function Home() {
             MPP protocol
           </a>{" "}
           · Built by{" "}
-          <span className="text-zinc-500">GTE</span>
+          <a
+            href="https://gte.xyz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-500 hover:text-zinc-400 transition-colors underline underline-offset-2"
+          >
+            GTE
+          </a>
+        </p>
+        <p className="text-[10px] text-zinc-700">
+          Machine payments detected via TIP-20 micropayment heuristic (≤$1 transfers)
         </p>
       </footer>
     </main>

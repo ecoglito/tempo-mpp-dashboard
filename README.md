@@ -44,6 +44,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TEMPO_RPC_URL` | `https://rpc.tempo.xyz` | Tempo blockchain RPC endpoint |
+| `MPP_THRESHOLD_USD` | `1` | Transfers ≤ this amount classified as MPP micropayments |
 
 ## Architecture
 
@@ -53,8 +54,8 @@ Open [http://localhost:3000](http://localhost:3000).
 3. SSE endpoint streams updates to the client every 3 seconds
 4. Client-side animated counters interpolate between updates
 
-### MPP Classification (Modular)
-Currently uses a simulated ratio for MPP vs human transaction split. The data layer in `src/lib/tempo.ts` is designed to be swapped out for a real MPP indexer when available. Look for the `MPP_RATIO` constant.
+### MPP Classification
+Machine payments are detected by analyzing TIP-20 stablecoin transfer events on-chain. Transfers ≤ $1 (configurable via `MPP_THRESHOLD_USD`) are classified as MPP micropayments — this matches MPP's design where agents pay $0.001-$0.10 per API call. Unique senders/receivers in the micropayment range are counted as active agents/services. The architecture supports swapping in a dedicated MPP indexer when one becomes available.
 
 ## Deploy to Vercel
 
