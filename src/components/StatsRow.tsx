@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatedCounter } from "./AnimatedCounter";
-import { formatNumber, formatUSD } from "@/lib/format";
 
 interface Stat {
   label: string;
@@ -15,16 +14,13 @@ interface StatsRowProps {
 
 export function StatsRow({ stats }: StatsRowProps) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[#e0e0e0] border border-[#e0e0e0] rounded-sm overflow-hidden">
       {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className="rounded-xl border border-zinc-800 bg-zinc-900/60 backdrop-blur-sm p-5 text-center"
-        >
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">
+        <div key={stat.label} className="bg-white p-5 text-center">
+          <p className="text-[10px] text-[#999] uppercase tracking-[0.15em] mb-2">
             {stat.label}
           </p>
-          <div className="text-2xl font-bold text-white tabular-nums">
+          <div className="font-serif text-2xl font-light text-black tabular-nums">
             {stat.format === "usd" ? (
               <AnimatedCounter
                 value={stat.value}

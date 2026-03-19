@@ -7,25 +7,22 @@ import type { ChainStats } from "@/lib/tempo";
 
 function PulsingDot() {
   return (
-    <span className="relative flex h-2.5 w-2.5">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+    <span className="relative flex h-2 w-2">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-30" />
+      <span className="relative inline-flex rounded-full h-2 w-2 bg-black" />
     </span>
   );
 }
 
 function LoadingState() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-6">
       <div className="relative">
-        <div className="w-16 h-16 border-2 border-zinc-700 rounded-full" />
-        <div className="w-16 h-16 border-2 border-t-violet-500 rounded-full animate-spin absolute inset-0" />
+        <div className="w-12 h-12 border border-[#e0e0e0] rounded-full" />
+        <div className="w-12 h-12 border border-t-black rounded-full animate-spin absolute inset-0" />
       </div>
       <div className="text-center">
-        <p className="text-zinc-400 text-lg">Connecting to Tempo...</p>
-        <p className="text-zinc-600 text-sm mt-1">
-          Fetching real-time chain data
-        </p>
+        <p className="text-[#666] text-sm">Connecting to Tempo...</p>
       </div>
     </div>
   );
@@ -33,21 +30,15 @@ function LoadingState() {
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-      <div className="text-5xl">⚠️</div>
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-6">
       <div className="text-center">
-        <p className="text-zinc-400 text-lg">
-          Unable to connect to Tempo RPC
-        </p>
-        <p className="text-zinc-600 text-sm mt-1">
-          The chain might be experiencing high load
-        </p>
+        <p className="text-[#666] text-sm">Unable to connect to Tempo RPC</p>
       </div>
       <button
         onClick={onRetry}
-        className="px-6 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors"
+        className="px-6 py-2 rounded-sm bg-black text-white text-xs uppercase tracking-[0.15em] hover:bg-[#333] transition-colors"
       >
-        Retry Connection
+        Retry
       </button>
     </div>
   );
@@ -61,14 +52,12 @@ export function Dashboard() {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const connect = useCallback(() => {
-    // Close existing connection
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
     setStatus("loading");
 
-    // Try SSE first, fall back to polling
     const es = new EventSource("/api/stream");
     eventSourceRef.current = es;
 
@@ -80,13 +69,12 @@ export function Dashboard() {
           setStatus("connected");
         }
       } catch {
-        // ignore parse errors
+        // ignore
       }
     };
 
     es.onerror = () => {
       es.close();
-      // Fall back to polling
       fetchWithPolling();
     };
   }, []);
@@ -120,8 +108,7 @@ export function Dashboard() {
   }, [connect]);
 
   if (status === "loading") return <LoadingState />;
-  if (status === "error" || !stats)
-    return <ErrorState onRetry={connect} />;
+  if (status === "error" || !stats) return <ErrorState onRetry={connect} />;
 
   const ratio = stats.humanToMachineRatio;
 
@@ -130,7 +117,7 @@ export function Dashboard() {
       {/* Live indicator */}
       <div className="flex items-center justify-center gap-2">
         <PulsingDot />
-        <span className="text-xs text-zinc-500 uppercase tracking-widest">
+        <span className="text-[10px] text-[#999] uppercase tracking-[0.2em]">
           Live · Block #{stats.currentBlock.toLocaleString()}
         </span>
       </div>
@@ -141,17 +128,11 @@ export function Dashboard() {
           icon="🚶"
           label="Human Payments"
           rate={stats.humanTxsPerSecond}
-          gradient="bg-gradient-to-br from-blue-500 to-cyan-500"
-          borderColor="border-blue-500/20"
-          glowColor="rgba(59, 130, 246, 0.15)"
         />
         <PaymentCard
           icon="🤖"
           label="Machine Payments"
           rate={stats.machineTxsPerSecond}
-          gradient="bg-gradient-to-br from-violet-500 to-fuchsia-500"
-          borderColor="border-violet-500/20"
-          glowColor="rgba(139, 92, 246, 0.15)"
         />
       </div>
 
@@ -183,15 +164,13 @@ export function Dashboard() {
 
       {/* Ratio */}
       {ratio > 0 && (
-        <div className="text-center">
-          <p className="text-zinc-500 text-sm">
+        <div className="text-center py-4">
+          <p className="text-sm text-[#666] leading-relaxed">
             For every{" "}
-            <span className="text-violet-400 font-semibold">
-              1 machine payment
-            </span>
-            , there are approximately{" "}
-            <span className="text-blue-400 font-semibold">
-              {ratio} human payments
+            <span className="text-black font-medium">1 machine payment</span>,
+            there are approximately{" "}
+            <span className="text-black font-medium">
+              {ratio.toLocaleString()} human payments
             </span>
           </p>
         </div>

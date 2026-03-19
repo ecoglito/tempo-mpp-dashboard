@@ -4,54 +4,59 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="pt-12 pb-6 px-4 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-          <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-blue-400 bg-clip-text text-transparent">
-            TempoMPP
-          </span>
+      <header className="pt-16 pb-8 px-4 text-center">
+        <p className="text-xs tracking-[0.3em] uppercase text-[#999] mb-6">
+          Tempo × MPP
+        </p>
+        <h1 className="font-serif text-5xl md:text-7xl font-light tracking-tight text-black leading-[1.1]">
+          Machine
+          <br />
+          Payments
         </h1>
-        <p className="mt-3 text-zinc-500 text-lg max-w-xl mx-auto">
+        <p className="mt-6 text-[#666] text-base max-w-md mx-auto leading-relaxed">
           Autonomous agents deserve autonomous payments.
         </p>
       </header>
 
       {/* Dashboard */}
-      <div className="flex-1 px-4 md:px-8 max-w-5xl mx-auto w-full pb-12">
+      <div className="flex-1 px-4 md:px-8 max-w-4xl mx-auto w-full pb-16">
         <Dashboard />
       </div>
 
       {/* Footer */}
-      <footer className="py-8 px-4 text-center border-t border-zinc-800/50 space-y-2">
-        <p className="text-xs text-zinc-600">
+      <footer className="py-10 px-4 text-center border-t border-[#e0e0e0]">
+        <p className="text-xs text-[#999] leading-relaxed">
           Data from{" "}
           <a
             href="https://explore.tempo.xyz"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-zinc-500 hover:text-zinc-400 transition-colors underline underline-offset-2"
+            className="text-[#666] hover:text-black transition-colors underline underline-offset-2"
           >
             explore.tempo.xyz
-          </a>{" "}
-          · Powered by the{" "}
+          </a>
+          {" · "}
+          Powered by the{" "}
           <a
             href="https://mpp.dev"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-zinc-500 hover:text-zinc-400 transition-colors underline underline-offset-2"
+            className="text-[#666] hover:text-black transition-colors underline underline-offset-2"
           >
             MPP protocol
-          </a>{" "}
-          · Built by{" "}
+          </a>
+          {" · "}
+          Built by{" "}
           <a
             href="https://gte.xyz"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-zinc-500 hover:text-zinc-400 transition-colors underline underline-offset-2"
+            className="text-[#666] hover:text-black transition-colors underline underline-offset-2"
           >
             GTE
           </a>
         </p>
-        <p className="text-[10px] text-zinc-700">
+        <p className="text-[10px] text-[#bbb] mt-3">
           Machine payments detected via TIP-20 micropayment heuristic (≤$1 transfers)
         </p>
       </footer>
