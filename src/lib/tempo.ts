@@ -7,25 +7,24 @@ import {
   type Log,
 } from "viem";
 
-// TIP-20 stablecoin used by MPP for payments
-const TIP20_ADDRESS =
-  "0x20c0000000000000000000000000000000000000" as const;
+// Stablecoins used on Tempo
+const PATHUSD = "0x20c0000000000000000000000000000000000000" as const;
+const USDC_E = "0x20c000000000000000000000b9537d11c60e8b50" as const;
 const TIP20_DECIMALS = 6;
 
-// Threshold: transfers <= this USD amount are classified as MPP (micropayments)
-const MPP_THRESHOLD = parseFloat(
-  process.env.MPP_THRESHOLD_USD || "1"
-);
+// MPP escrow contract — ALL session payments flow through here
+const MPP_ESCROW = "0x33b901018174ddabe4841042ab76ba85d4e24f25";
+
+// Known MPP recipient (Tempo proxy for OpenAI, Anthropic, etc.)
+const MPP_RECIPIENT = "0xca4e835f803cb0b7c428222b3a3b98518d4779fe";
 
 // Minimum amount to count — filters out gas fee dust
-const MPP_FLOOR = parseFloat(
-  process.env.MPP_FLOOR_USD || "0.001"
-);
+const MPP_FLOOR = parseFloat(process.env.MPP_FLOOR_USD || "0.001");
 
 // System addresses to exclude (fee collector, DEX router, etc.)
 const SYSTEM_ADDRESSES = new Set([
-  "0xfeec000000000000000000000000000000000000", // Fee collector
-  "0xdec0000000000000000000000000000000000000", // DEX contract
+  "0xfeec000000000000000000000000000000000000",
+  "0xdec0000000000000000000000000000000000000",
 ]);
 
 const TRANSFER_EVENT = parseAbiItem(
@@ -81,21 +80,17 @@ const CACHE_TTL_MS = 2500;
 // ---- Transfer classification ----
 interface TransferClassification {
   machineTxCount: number;
-  humanTxCount: number;
   machineVolume: number;
-  humanVolume: number;
-  uniqueSenders: Set<string>;
-  uniqueReceivers: Set<string>;
+  uniqueAgents: Set<string>;
+  uniqueServices: Set<string>;
 }
 
 function classifyTransfers(logs: Log[]): TransferClassification {
   const result: TransferClassification = {
     machineTxCount: 0,
-    humanTxCount: 0,
     machineVolume: 0,
-    humanVolume: 0,
-    uniqueSenders: new Set(),
-    uniqueReceivers: new Set(),
+    uniqueAgents: new Set(),
+    uniqueServices: new Set(),
   };
 
   for (const log of logs) {
@@ -110,21 +105,25 @@ function classifyTransfers(logs: Log[]): TransferClassification {
     const from = (args.args.from ?? "").toLowerCase();
     const to = (args.args.to ?? "").toLowerCase();
 
-    // Skip system addresses (fee collector, DEX, etc.)
     if (SYSTEM_ADDRESSES.has(from) || SYSTEM_ADDRESSES.has(to)) continue;
-
-    // Skip dust (gas fee shuffling)
     if (usdValue < MPP_FLOOR) continue;
 
-    if (usdValue <= MPP_THRESHOLD) {
-      // Micropayment = likely MPP machine payment
+    // MPP payment = involves the escrow contract OR the known MPP recipient
+    const isMPP =
+      from === MPP_ESCROW ||
+      to === MPP_ESCROW ||
+      to === MPP_RECIPIENT ||
+      from === MPP_RECIPIENT;
+
+    if (isMPP) {
       result.machineTxCount++;
       result.machineVolume += usdValue;
-      result.uniqueSenders.add(from);
-      result.uniqueReceivers.add(to);
-    } else {
-      result.humanTxCount++;
-      result.humanVolume += usdValue;
+      // Agent = whoever deposits into escrow (not the escrow itself)
+      if (to === MPP_ESCROW) result.uniqueAgents.add(from);
+      // Service = whoever receives from escrow settlements
+      if (from === MPP_ESCROW && to !== MPP_RECIPIENT)
+        result.uniqueServices.add(to);
+      if (to === MPP_RECIPIENT) result.uniqueServices.add(to);
     }
   }
 
@@ -188,41 +187,48 @@ export async function fetchChainStats(): Promise<ChainStats> {
 
     const txsPerSecond = avgTxPerBlock * blocksPerSecond;
 
-    // Fetch TIP-20 Transfer events in the sample window for classification
+    // Fetch Transfer events for BOTH stablecoins in the sample window
     let classification: TransferClassification;
     try {
-      const logs = await client.getLogs({
-        address: TIP20_ADDRESS,
-        event: TRANSFER_EVENT,
-        fromBlock: startBlock,
-        toBlock: currentBlockNumber,
-      });
-      classification = classifyTransfers(logs);
+      const [pathLogs, usdcLogs] = await Promise.all([
+        client
+          .getLogs({
+            address: PATHUSD,
+            event: TRANSFER_EVENT,
+            fromBlock: startBlock,
+            toBlock: currentBlockNumber,
+          })
+          .catch(() => [] as Log[]),
+        client
+          .getLogs({
+            address: USDC_E,
+            event: TRANSFER_EVENT,
+            fromBlock: startBlock,
+            toBlock: currentBlockNumber,
+          })
+          .catch(() => [] as Log[]),
+      ]);
+      const allLogs = [...pathLogs, ...usdcLogs];
+      classification = classifyTransfers(allLogs);
     } catch {
-      // If getLogs fails (e.g. RPC doesn't support it), fall back to ratio estimate
       classification = {
         machineTxCount: 0,
-        humanTxCount: 0,
         machineVolume: 0,
-        humanVolume: 0,
-        uniqueSenders: new Set(),
-        uniqueReceivers: new Set(),
+        uniqueAgents: new Set(),
+        uniqueServices: new Set(),
       };
     }
 
-    const totalClassified =
-      classification.machineTxCount + classification.humanTxCount;
-
-    // Machine payments = MPP micropayments on Tempo (real on-chain data)
+    // Machine payments = MPP escrow activity on Tempo (real on-chain data)
     // Human payments = global payment networks (Visa, MC, etc.)
     const machineTxsPerSecond =
-      totalClassified > 0
+      classification.machineTxCount > 0
         ? classification.machineTxCount / timeDelta
         : 0;
     const humanTxsPerSecond = GLOBAL_HUMAN_PAYMENTS_PER_SEC;
 
     const machineVolumeRate =
-      totalClassified > 0
+      classification.machineTxCount > 0
         ? classification.machineVolume / timeDelta
         : 0;
 
@@ -245,8 +251,8 @@ export async function fetchChainStats(): Promise<ChainStats> {
       machineTxsPerSecond,
       volume24h: machineVolume24h,
       machineVolume24h,
-      activeAgents: classification.uniqueSenders.size || 0,
-      activeServices: classification.uniqueReceivers.size || 0,
+      activeAgents: classification.uniqueAgents.size || 0,
+      activeServices: classification.uniqueServices.size || 0,
       humanToMachineRatio,
       timestamp: Date.now(),
     };

@@ -57,7 +57,7 @@ export default function Home() {
           </a>
         </p>
         <p className="text-[10px] text-[#bbb] mt-3">
-          Machine payments detected via TIP-20 micropayment heuristic (≤$1 transfers)
+          Machine payments detected via MPP escrow contract activity on Tempo mainnet
         </p>
       </footer>
     </main>
