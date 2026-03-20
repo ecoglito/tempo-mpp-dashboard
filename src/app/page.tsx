@@ -1,8 +1,10 @@
 import { Dashboard } from "@/components/Dashboard";
+import { LiveFeed } from "@/components/LiveFeed";
 
 export default function Home() {
   return (
     <main className="min-h-screen flex flex-col">
+      <LiveFeed />
       {/* Header */}
       <header className="pt-16 pb-8 px-4 text-center">
         <p className="text-xs tracking-[0.3em] uppercase text-[#999] mb-6">
