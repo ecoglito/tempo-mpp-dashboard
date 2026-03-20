@@ -7,9 +7,15 @@ import {
   type Log,
 } from "viem";
 
-// Stablecoins used on Tempo
-const PATHUSD = "0x20c0000000000000000000000000000000000000" as const;
-const USDC_E = "0x20c000000000000000000000b9537d11c60e8b50" as const;
+// All active TIP-20 stablecoins on Tempo
+const TEMPO_STABLECOINS = [
+  { address: "0x20c0000000000000000000000000000000000000", symbol: "pathUSD", decimals: 6 },
+  { address: "0x20c000000000000000000000b9537d11c60e8b50", symbol: "USDC.e", decimals: 6 },
+  { address: "0x20c00000000000000000000031d99efa5dbd3713", symbol: "ENSH", decimals: 6 },
+  { address: "0x20c000000000000000000000987bef2978df41f9", symbol: "TIMECOIN", decimals: 6 },
+  { address: "0x20c000000000000000000000766bc256ae7da3e9", symbol: "TA", decimals: 6 },
+] as const;
+
 const TIP20_DECIMALS = 6;
 
 // MPP escrow contract — ALL session payments flow through here
@@ -64,8 +70,11 @@ export interface ChainStats {
   txsPerSecond: number;
   humanTxsPerSecond: number;
   machineTxsPerSecond: number;
+  tempoHumanTxsPerSecond: number;
   volume24h: number;
   machineVolume24h: number;
+  mppTxs24h: number;
+  mppVolume24h: number;
   activeAgents: number;
   activeServices: number;
   humanToMachineRatio: number;
@@ -81,6 +90,8 @@ const CACHE_TTL_MS = 2500;
 interface TransferClassification {
   machineTxCount: number;
   machineVolume: number;
+  totalStablecoinTxCount: number;
+  totalStablecoinVolume: number;
   uniqueAgents: Set<string>;
   uniqueServices: Set<string>;
 }
@@ -89,6 +100,8 @@ function classifyTransfers(logs: Log[]): TransferClassification {
   const result: TransferClassification = {
     machineTxCount: 0,
     machineVolume: 0,
+    totalStablecoinTxCount: 0,
+    totalStablecoinVolume: 0,
     uniqueAgents: new Set(),
     uniqueServices: new Set(),
   };
@@ -107,6 +120,10 @@ function classifyTransfers(logs: Log[]): TransferClassification {
 
     if (SYSTEM_ADDRESSES.has(from) || SYSTEM_ADDRESSES.has(to)) continue;
     if (usdValue < MPP_FLOOR) continue;
+
+    // Count all stablecoin transfers
+    result.totalStablecoinTxCount++;
+    result.totalStablecoinVolume += usdValue;
 
     // MPP payment = involves the escrow contract OR the known MPP recipient
     const isMPP =
@@ -128,6 +145,120 @@ function classifyTransfers(logs: Log[]): TransferClassification {
   }
 
   return result;
+}
+
+// ---- Historical data for 24h chart ----
+export interface HistoryDataPoint {
+  timestamp: number;
+  mppTxCount: number;
+  mppVolume: number;
+}
+
+export interface HistoryResponse {
+  points: HistoryDataPoint[];
+  mppTxs24h: number;
+  mppVolume24h: number;
+}
+
+let cachedHistory: HistoryResponse | null = null;
+let historyCacheTimestamp = 0;
+const HISTORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export async function fetchHistoricalData(): Promise<HistoryResponse> {
+  if (cachedHistory && Date.now() - historyCacheTimestamp < HISTORY_CACHE_TTL_MS) {
+    return cachedHistory;
+  }
+
+  const client = getClient();
+
+  try {
+    const currentBlock = await client.getBlockNumber();
+    // ~0.5s block time → 172,800 blocks in 24h
+    const blocksIn24h = 172_800n;
+    const startBlock = currentBlock > blocksIn24h ? currentBlock - blocksIn24h : 0n;
+
+    // 48 sample points at ~30 min intervals (3,600 blocks per window)
+    const windowSize = 3_600n;
+    const numPoints = 48;
+
+    // Fetch all points in parallel (batched)
+    const points: HistoryDataPoint[] = [];
+    let totalMppTxs = 0;
+    let totalMppVolume = 0;
+
+    // Process in batches of 8 to avoid overwhelming RPC
+    const batchSize = 8;
+    for (let batchStart = 0; batchStart < numPoints; batchStart += batchSize) {
+      const batchEnd = Math.min(batchStart + batchSize, numPoints);
+      const batchPromises = [];
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        const windowStart = startBlock + BigInt(i) * windowSize;
+        const windowEnd = windowStart + windowSize - 1n > currentBlock
+          ? currentBlock
+          : windowStart + windowSize - 1n;
+
+        batchPromises.push(
+          (async () => {
+            try {
+              // Get timestamp for this window
+              const block = await client.getBlock({ blockNumber: windowStart });
+              const timestamp = Number(block.timestamp) * 1000;
+
+              // Query all stablecoin Transfer events in this window
+              const logArrays = await Promise.all(
+                TEMPO_STABLECOINS.map((token) =>
+                  client
+                    .getLogs({
+                      address: token.address as `0x${string}`,
+                      event: TRANSFER_EVENT,
+                      fromBlock: windowStart,
+                      toBlock: windowEnd,
+                    })
+                    .catch(() => [] as Log[])
+                )
+              );
+              const allLogs = logArrays.flat();
+              const classification = classifyTransfers(allLogs);
+
+              return {
+                timestamp,
+                mppTxCount: classification.machineTxCount,
+                mppVolume: classification.machineVolume,
+              };
+            } catch {
+              return null;
+            }
+          })()
+        );
+      }
+
+      const batchResults = await Promise.all(batchPromises);
+      for (const result of batchResults) {
+        if (result) {
+          points.push(result);
+          totalMppTxs += result.mppTxCount;
+          totalMppVolume += result.mppVolume;
+        }
+      }
+    }
+
+    // Sort by timestamp
+    points.sort((a, b) => a.timestamp - b.timestamp);
+
+    const history: HistoryResponse = {
+      points,
+      mppTxs24h: totalMppTxs,
+      mppVolume24h: totalMppVolume,
+    };
+
+    cachedHistory = history;
+    historyCacheTimestamp = Date.now();
+    return history;
+  } catch (error) {
+    console.error("Failed to fetch historical data:", error);
+    return { points: [], mppTxs24h: 0, mppVolume24h: 0 };
+  }
 }
 
 // Fetch recent blocks and TIP-20 transfers, classify MPP vs human
@@ -187,33 +318,29 @@ export async function fetchChainStats(): Promise<ChainStats> {
 
     const txsPerSecond = avgTxPerBlock * blocksPerSecond;
 
-    // Fetch Transfer events for BOTH stablecoins in the sample window
+    // Fetch Transfer events for ALL stablecoins in the sample window
     let classification: TransferClassification;
     try {
-      const [pathLogs, usdcLogs] = await Promise.all([
-        client
-          .getLogs({
-            address: PATHUSD,
-            event: TRANSFER_EVENT,
-            fromBlock: startBlock,
-            toBlock: currentBlockNumber,
-          })
-          .catch(() => [] as Log[]),
-        client
-          .getLogs({
-            address: USDC_E,
-            event: TRANSFER_EVENT,
-            fromBlock: startBlock,
-            toBlock: currentBlockNumber,
-          })
-          .catch(() => [] as Log[]),
-      ]);
-      const allLogs = [...pathLogs, ...usdcLogs];
+      const logArrays = await Promise.all(
+        TEMPO_STABLECOINS.map((token) =>
+          client
+            .getLogs({
+              address: token.address as `0x${string}`,
+              event: TRANSFER_EVENT,
+              fromBlock: startBlock,
+              toBlock: currentBlockNumber,
+            })
+            .catch(() => [] as Log[])
+        )
+      );
+      const allLogs = logArrays.flat();
       classification = classifyTransfers(allLogs);
     } catch {
       classification = {
         machineTxCount: 0,
         machineVolume: 0,
+        totalStablecoinTxCount: 0,
+        totalStablecoinVolume: 0,
         uniqueAgents: new Set(),
         uniqueServices: new Set(),
       };
@@ -227,6 +354,16 @@ export async function fetchChainStats(): Promise<ChainStats> {
         : 0;
     const humanTxsPerSecond = GLOBAL_HUMAN_PAYMENTS_PER_SEC;
 
+    // Tempo human = total stablecoin transfers minus MPP
+    const totalStablecoinTxsPerSecond =
+      classification.totalStablecoinTxCount > 0
+        ? classification.totalStablecoinTxCount / timeDelta
+        : 0;
+    const tempoHumanTxsPerSecond = Math.max(
+      0,
+      totalStablecoinTxsPerSecond - machineTxsPerSecond
+    );
+
     const machineVolumeRate =
       classification.machineTxCount > 0
         ? classification.machineVolume / timeDelta
@@ -237,10 +374,14 @@ export async function fetchChainStats(): Promise<ChainStats> {
         ? Math.round(humanTxsPerSecond / machineTxsPerSecond)
         : 0;
 
-    // Extrapolate 24h totals
+    // Extrapolate 24h totals (rate-based estimates for display)
     const totalTempoTxs24h = Math.round(txsPerSecond * 86400);
-    const machineTxs24h = Math.round(machineTxsPerSecond * 86400);
     const machineVolume24h = machineVolumeRate * 86400;
+
+    // Try to get actual 24h cumulative from history cache (non-blocking)
+    const historyCumulative = cachedHistory
+      ? { mppTxs24h: cachedHistory.mppTxs24h, mppVolume24h: cachedHistory.mppVolume24h }
+      : { mppTxs24h: Math.round(machineTxsPerSecond * 86400), mppVolume24h: machineVolume24h };
 
     const stats: ChainStats = {
       currentBlock: Number(currentBlockNumber),
@@ -249,8 +390,11 @@ export async function fetchChainStats(): Promise<ChainStats> {
       txsPerSecond,
       humanTxsPerSecond,
       machineTxsPerSecond,
+      tempoHumanTxsPerSecond,
       volume24h: machineVolume24h,
       machineVolume24h,
+      mppTxs24h: historyCumulative.mppTxs24h,
+      mppVolume24h: historyCumulative.mppVolume24h,
       activeAgents: classification.uniqueAgents.size || 0,
       activeServices: classification.uniqueServices.size || 0,
       humanToMachineRatio,
@@ -269,8 +413,11 @@ export async function fetchChainStats(): Promise<ChainStats> {
       txsPerSecond: 0,
       humanTxsPerSecond: GLOBAL_HUMAN_PAYMENTS_PER_SEC,
       machineTxsPerSecond: 0,
+      tempoHumanTxsPerSecond: 0,
       volume24h: 0,
       machineVolume24h: 0,
+      mppTxs24h: 0,
+      mppVolume24h: 0,
       activeAgents: 0,
       activeServices: 0,
       humanToMachineRatio: 0,

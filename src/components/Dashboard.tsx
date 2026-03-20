@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { PaymentCard } from "./PaymentCard";
 import { StatsRow } from "./StatsRow";
+import { HistoryChart } from "./HistoryChart";
 import type { ChainStats } from "@/lib/tempo";
 
 function PulsingDot() {
@@ -122,18 +123,29 @@ export function Dashboard() {
         </span>
       </div>
 
-      {/* Main cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <PaymentCard
-          icon="🤖"
-          label="Machine Payments"
-          rate={stats.machineTxsPerSecond}
-        />
-        <PaymentCard
-          icon="🚶"
-          label="Human Payments"
-          rate={stats.humanTxsPerSecond}
-        />
+      {/* Main cards — 3 columns on desktop, stacked on mobile (machine first) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="order-2 md:order-1">
+          <PaymentCard
+            icon="🌍"
+            label="Global Human Payments"
+            rate={stats.humanTxsPerSecond}
+          />
+        </div>
+        <div className="order-3 md:order-2">
+          <PaymentCard
+            icon="🚶"
+            label="Tempo Human Payments"
+            rate={stats.tempoHumanTxsPerSecond}
+          />
+        </div>
+        <div className="order-1 md:order-3">
+          <PaymentCard
+            icon="🤖"
+            label="Machine Payments"
+            rate={stats.machineTxsPerSecond}
+          />
+        </div>
       </div>
 
       {/* Stats row */}
@@ -141,12 +153,12 @@ export function Dashboard() {
         stats={[
           {
             label: "MPP Txs (24h)",
-            value: Math.round(stats.machineTxsPerSecond * 86400),
+            value: stats.mppTxs24h,
             format: "number",
           },
           {
             label: "MPP Volume (24h)",
-            value: stats.machineVolume24h,
+            value: stats.mppVolume24h,
             format: "usd",
           },
           {
@@ -161,6 +173,9 @@ export function Dashboard() {
           },
         ]}
       />
+
+      {/* Historical chart */}
+      <HistoryChart />
 
       {/* Ratio */}
       {ratio > 0 && (
