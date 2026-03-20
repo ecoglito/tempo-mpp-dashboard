@@ -125,14 +125,14 @@ export function Dashboard() {
       {/* Main cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <PaymentCard
-          icon="🚶"
-          label="Human Payments"
-          rate={stats.humanTxsPerSecond}
-        />
-        <PaymentCard
           icon="🤖"
           label="Machine Payments"
           rate={stats.machineTxsPerSecond}
+        />
+        <PaymentCard
+          icon="🚶"
+          label="Human Payments"
+          rate={stats.humanTxsPerSecond}
         />
       </div>
 
