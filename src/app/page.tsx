@@ -48,6 +48,16 @@ export default function Home() {
             MPP protocol
           </a>
           {" · "}
+          Supply side data from{" "}
+          <a
+            href="https://www.artemis.xyz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#666] hover:text-black transition-colors underline underline-offset-2"
+          >
+            Artemis
+          </a>
+          {" · "}
           Built by{" "}
           <a
             href="https://gte.xyz"

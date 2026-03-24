@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { PaymentCard } from "./PaymentCard";
 import { StatsRow } from "./StatsRow";
 import { HistoryChart } from "./HistoryChart";
+import { ArtemisCharts } from "./ArtemisCharts";
 import type { ChainStats } from "@/lib/tempo";
 
 function PulsingDot() {
@@ -176,6 +177,9 @@ export function Dashboard() {
 
       {/* Historical chart */}
       <HistoryChart />
+
+      {/* Artemis supply side charts */}
+      <ArtemisCharts />
 
       {/* Ratio */}
       {ratio > 0 && (
